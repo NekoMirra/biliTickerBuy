@@ -7,19 +7,25 @@
 在开始之前，请确保您的开发环境已安装以下必要工具：
 
 ### 1. Node.js
+
 前端构建依赖 Node.js 环境。
+
 - **下载地址**: [Node.js 官网](https://nodejs.org/)
 - **版本要求**: 建议使用 LTS 版本 (v16 或更高)。
 - **验证安装**: 在终端运行 `node -v` 和 `npm -v`。
 
 ### 2. Rust
+
 Tauri 后端依赖 Rust 编程语言。
+
 - **下载地址**: [Rust 官网](https://www.rust-lang.org/tools/install)
 - **安装方式**: 推荐使用 `rustup` 进行安装。
 - **验证安装**: 在终端运行 `rustc --version` 和 `cargo --version`。
 
 ### 3. 系统构建工具 (Windows)
+
 在 Windows 上构建 Rust 项目需要 C++ 生成工具。
+
 - **下载**: 安装 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)。
 - **配置**: 在安装程序中，勾选 "使用 C++ 的桌面开发" 工作负载。
 
@@ -30,21 +36,25 @@ Tauri 后端依赖 Rust 编程语言。
 ## 📦 安装依赖
 
 1. **克隆仓库** (如果您还没有克隆):
+
    ```bash
    git clone https://github.com/NekoMirra/biliTickerBuy.git
    ```
 
 2. **进入项目目录**:
    请注意，Rust 重构版本的代码位于 `bili-ticker-buy-rust` 子目录下。
+
    ```bash
    cd biliTickerBuy/bili-ticker-buy-rust
    ```
 
 3. **安装前端依赖**:
    使用 npm 安装项目所需的 Node.js 包。
+
    ```bash
    npm install
    ```
+
    *如果下载速度较慢，建议配置国内镜像源。*
 
 ---
