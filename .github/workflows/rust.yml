@@ -16,7 +16,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Debug - show files and find Cargo.toml
+      run: |
+        echo "PWD: $(pwd)"
+        ls -la
+        echo "Recursive find Cargo.toml (limit depth 4):"
+        find . -maxdepth 4 -name Cargo.toml || true
+
     - name: Build
       run: cargo build --verbose
+      working-directory: ./bili-ticker-buy-rust/src-tauri
+
     - name: Run tests
       run: cargo test --verbose
+      working-directory: ./bili-ticker-buy-rust/src-tauri
