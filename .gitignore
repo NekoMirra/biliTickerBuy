@@ -28,3 +28,5 @@ bili-ticker-buy-rust/src-tauri/target/
 **/*.pdb
 **/*.rlib
 **/*.rmeta
+node_modules/
+**/node_modules/
