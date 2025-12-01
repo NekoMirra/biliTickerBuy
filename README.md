@@ -1,8 +1,8 @@
 <div align="center">
   <a href="https://github.com/NekoMirra/biliTickerBuy" target="_blank">
-    <img width="160" src="assets/logo.png" alt="logo">
+    <img width="160" src="bili-ticker-buy-rust\bili-ticker-buy-rust\src\assets\icon.ico" alt="logo">
   </a>
-  <h2 id="koishi">biliTickerBuy (Rust Refactored)</h1>
+  <h2 id="koishi">biliTickerBuy (Rust 重构版)</h1>
 
 <p>
   <!-- GitHub Downloads -->
@@ -22,11 +22,10 @@
     <img src="https://img.shields.io/github/stars/NekoMirra/biliTickerBuy" alt="GitHub Repo stars">
   </a>
 </p>
-<a href="https://trendshift.io/repositories/11145" target="_blank"><img src="https://trendshift.io/api/badge/repositories/11145" alt="mikumifa%2FbiliTickerBuy | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 这是一个开源免费，简单易用的B站会员购辅助工具。
 <br/>
-**本项目是基于 [mikumifa/biliTickerBuy](https://github.com/mikumifa/biliTickerBuy) 的 Rust 重构版本，理论具有极高并发性能，并实现了账号管理、精确定时、历史记录、任务管理等功能。**
+**本项目是基于 [mikumifa/biliTickerBuy](https://github.com/mikumifa/biliTickerBuy) 的 Rust 重构版本，理论具有极高并发性能，提供了美观的前端UI，并实现了账号管理、精确校时、历史记录、任务管理等功能。**
 </div>
 
 ## 💻 快速安装
@@ -51,7 +50,7 @@
 
 如本项目中存在侵犯 Bilibili 公司合法权益的内容，请通过邮箱 [NekoMirra@outlook.com](NekoMirra@outlook.com]) 与我联系，我将第一时间下架相关内容并删除本仓库。对此造成的不便，我深表歉意，感谢您的理解与包容。
 
-## 🤩 项目贡献者
+## 🤩 原项目贡献者
 
 <a href="https://github.com/mikumifa/biliTickerBuy/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=mikumifa/biliTickerBuy&preview=true&max=&columns=" />
