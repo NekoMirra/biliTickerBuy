@@ -27,6 +27,8 @@
 <br/>
 **本项目是基于 [mikumifa/biliTickerBuy](https://github.com/mikumifa/biliTickerBuy) 的 Rust 重构版本，理论具有极高并发性能，提供了美观的前端UI，并实现了账号管理、精确校时、历史记录、任务管理等功能。**
 </div>
+## 🎇 程序预览
+<img width="1204" height="947" alt="image" src="https://github.com/user-attachments/assets/d960c243-9bf7-4d2b-9c70-33f9c1fdbfc6" />
 
 ## 💻 快速安装
 
@@ -48,7 +50,7 @@
 
 本程序设计时已尽可能控制请求频率，避免对 Bilibili 服务器造成任何明显负载或影响。项目仅作为学习用途，不具备大规模、高并发的能力，亦无任何恶意行为或干扰服务的企图。
 
-如本项目中存在侵犯 Bilibili 公司合法权益的内容，请通过邮箱 [NekoMirra@outlook.com](NekoMirra@outlook.com]) 与我联系，我将第一时间下架相关内容并删除本仓库。对此造成的不便，我深表歉意，感谢您的理解与包容。
+如本项目中存在侵犯 Bilibili 公司合法权益的内容，请通过邮箱 [NekoMirra@outlook.com](NekoMirra@outlook.com]) 与我联系或与原项目作者联系，将第一时间下架相关内容并删除本仓库。对此造成的不便，我深表歉意，感谢您的理解与包容。
 
 ## 🤩 原项目贡献者
 
