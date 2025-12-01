@@ -1426,7 +1426,7 @@ function App() {
 
                 <div className="mt-auto pt-4 border-t border-gray-800">
                     <div className="text-xs text-gray-500 text-center">
-                        v2.1.0
+                        V2.4.0
                     </div>
                 </div>
             </div>
@@ -2637,7 +2637,7 @@ function App() {
                                 <div className="bg-gray-800 rounded-xl p-8 shadow-lg border border-gray-700 text-center">
                                     <img src={logo} alt="Logo" className="w-20 h-20 rounded-2xl mx-auto mb-6 shadow-lg shadow-blue-500/20" />
                                     <h2 className="text-3xl font-bold mb-2">B站抢票助手</h2>
-                                    <p className="text-gray-400 mb-8">Rust 重构版 v2.1.0</p>
+                                    <p className="text-gray-400 mb-8">Rust 重构版 V2.4.0</p>
 
                                     <div className="text-left bg-gray-900/50 p-6 rounded-xl border border-gray-700 mb-8 space-y-4 text-sm text-gray-300 leading-relaxed">
                                         <p>
