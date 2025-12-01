@@ -21,3 +21,10 @@ test.py
 main.build
 main.dist
 .DS_Store
+# Rust项目相关忽略文件
+target/
+bili-ticker-buy-rust/src-tauri/target/
+**/target/
+**/*.pdb
+**/*.rlib
+**/*.rmeta
