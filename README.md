@@ -27,12 +27,13 @@
 <br/>
 **本项目是基于 [mikumifa/biliTickerBuy](https://github.com/mikumifa/biliTickerBuy) 的 Rust 重构版本，提供了美观的前端UI，理论具有极高性能，并实现了账号管理、精确校时、历史记录、任务管理等功能。**
 </div>
+
 ## 🎇 程序预览
 <img width="1204" height="947" alt="image" src="https://github.com/user-attachments/assets/d960c243-9bf7-4d2b-9c70-33f9c1fdbfc6" />
 
 ## 💻 快速安装
 
-从github上[下载](https://github.com/NekoMirra/biliTickerBuy/releases)
+从github仓库获取[下载](https://github.com/NekoMirra/biliTickerBuy/releases)或自行克隆到本地进行构建
 
 ## 📩 免责声明
 
