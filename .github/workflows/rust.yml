@@ -24,6 +24,17 @@ jobs:
         echo "Recursive find Cargo.toml (limit depth 4):"
         find . -maxdepth 4 -name Cargo.toml || true
 
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev
+        # Ensure pkg-config path is available for typical Ubuntu installs
+        if [ -f /usr/lib/x86_64-linux-gnu/pkgconfig/glib-2.0.pc ]; then
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+        fi
+        pkg-config --modversion glib-2.0 || true
+        pkg-config --modversion gdk-3.0 || true
+
     - name: Build
       run: cargo build --verbose
       working-directory: ./bili-ticker-buy-rust/src-tauri
