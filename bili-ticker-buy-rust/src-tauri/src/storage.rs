@@ -1,7 +1,21 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use anyhow::Result;
+use tauri::api::path::app_config_dir;
+use tauri::Config;
+
+// 获取通用的存储路径
+fn get_storage_path(file_name: &str) -> PathBuf {
+    // 这里的 Config::default() 对应 tauri.conf.json 的配置
+    // macOS 下通常指向 ~/Library/Application Support/com.nekomirra.bilitickerbuy/
+    let mut path = app_config_dir(&Config::default()).unwrap_or_else(|| PathBuf::from("."));
+    if !path.exists() {
+        let _ = fs::create_dir_all(&path);
+    }
+    path.push(file_name);
+    path
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Account {
@@ -38,8 +52,9 @@ pub struct ProjectConfig {
 }
 
 pub fn get_accounts() -> Result<Vec<Account>> {
-    if Path::new("accounts.json").exists() {
-        let content = fs::read_to_string("accounts.json")?;
+    let path = get_storage_path("accounts.json");
+    if path.exists() {
+        let content = fs::read_to_string(path)?;
         let accounts: Vec<Account> = serde_json::from_str(&content).unwrap_or_default();
         Ok(accounts)
     } else {
@@ -48,14 +63,16 @@ pub fn get_accounts() -> Result<Vec<Account>> {
 }
 
 pub fn save_accounts(accounts: &Vec<Account>) -> Result<()> {
+    let path = get_storage_path("accounts.json");
     let json = serde_json::to_string_pretty(accounts)?;
-    fs::write("accounts.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
 
 pub fn get_history() -> Result<Vec<HistoryItem>> {
-    if Path::new("history.json").exists() {
-        let content = fs::read_to_string("history.json")?;
+    let path = get_storage_path("history.json");
+    if path.exists() {
+        let content = fs::read_to_string(path)?;
         let history: Vec<HistoryItem> = serde_json::from_str(&content).unwrap_or_default();
         Ok(history)
     } else {
@@ -64,21 +81,24 @@ pub fn get_history() -> Result<Vec<HistoryItem>> {
 }
 
 pub fn add_history_item(item: HistoryItem) -> Result<()> {
+    let path = get_storage_path("history.json");
     let mut history = get_history()?;
     history.insert(0, item);
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write("history.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
 
 pub fn clear_history() -> Result<()> {
-    fs::write("history.json", "[]")?;
+    let path = get_storage_path("history.json");
+    fs::write(path, "[]")?;
     Ok(())
 }
 
 pub fn get_project_history() -> Result<Vec<ProjectConfig>> {
-    if Path::new("project_history.json").exists() {
-        let content = fs::read_to_string("project_history.json")?;
+    let path = get_storage_path("project_history.json");
+    if path.exists() {
+        let content = fs::read_to_string(path)?;
         let history: Vec<ProjectConfig> = serde_json::from_str(&content).unwrap_or_default();
         Ok(history)
     } else {
@@ -87,45 +107,35 @@ pub fn get_project_history() -> Result<Vec<ProjectConfig>> {
 }
 
 pub fn add_project_history(item: ProjectConfig) -> Result<()> {
+    let path = get_storage_path("project_history.json");
     let mut history = get_project_history()?;
     
     if item.sku_id.is_empty() {
-        // Adding a generic project (viewed but not configured)
-        // Remove any existing generic entry for THIS project
         history.retain(|p| !(p.project_id == item.project_id && p.sku_id.is_empty()));
-        
-        // Check if there are any specific entries for this project
         let has_specific = history.iter().any(|p| p.project_id == item.project_id && !p.sku_id.is_empty());
-        
-        // If no specific entries, insert this generic one at the top
         if !has_specific {
             history.insert(0, item);
         }
     } else {
-        // Adding a specific configuration
-        // Remove exactly this config if it exists
         history.retain(|p| p.sku_id != item.sku_id);
-        
-        // Remove any generic entry for this project (since we now have a specific one)
         history.retain(|p| !(p.project_id == item.project_id && p.sku_id.is_empty()));
-        
         history.insert(0, item);
     }
 
-    // Limit history size
     if history.len() > 100 {
         history.truncate(100);
     }
 
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write("project_history.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
 
 pub fn remove_project_history_item(project_id: String, sku_id: String) -> Result<()> {
+    let path = get_storage_path("project_history.json");
     let mut history = get_project_history()?;
     history.retain(|p| !(p.project_id == project_id && p.sku_id == sku_id));
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write("project_history.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
