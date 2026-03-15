@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
+import { getVersion } from '@tauri-apps/api/app';
+import { open as openShell } from '@tauri-apps/api/shell';
 import { listen } from "@tauri-apps/api/event";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/api/notification";
-import { Play, Settings, User, FileJson, Terminal, Clock, Bell, Network, Volume2, LogOut, RefreshCw, Search, CheckSquare, Square, Trash2, Plus, History, X, List, Save, Copy, Crown, ExternalLink, Upload, Download, Github, LayoutDashboard, Rocket } from "lucide-react";
+import { Play, Settings, User, FileJson, Terminal, Clock, Bell, Network, Volume2, LogOut, RefreshCw, Search, CheckSquare, Square, Trash2, Plus, History, X, List, Save, Copy, Crown, ExternalLink, Upload, Download, Github, LayoutDashboard, Rocket, RotateCw } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import logo from "./assets/logo.png";
 import "./App.css";
@@ -158,6 +160,48 @@ function App() {
     const logsEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const cookieFileInputRef = useRef(null);
+
+    // Update Check State
+    const [appVersion, setAppVersion] = useState("");
+    const [updateStatus, setUpdateStatus] = useState({ state: "idle", message: "", remoteVersion: "" }); 
+    // state: idle, checking, success, error, update-available
+
+    useEffect(() => {
+        getVersion().then(setAppVersion).catch(console.error);
+    }, []);
+
+    const checkForUpdates = async () => {
+        setUpdateStatus({ state: "checking", message: "正在检查更新...", remoteVersion: "" });
+        try {
+            const res = await fetch("https://api.github.com/repos/NekoMirra/biliTickerBuy/releases/latest");
+            if (!res.ok) throw new Error("无法获取最新版本信息");
+            const data = await res.json();
+            const remoteTag = data.tag_name.replace(/^v/, "");
+            
+            // Simple version compare
+            const v1 = appVersion.split('.').map(Number);
+            const v2 = remoteTag.split('.').map(Number);
+            
+            let hasUpdate = false;
+            for (let i = 0; i < 3; i++) {
+                if ((v2[i] || 0) > (v1[i] || 0)) {
+                    hasUpdate = true;
+                    break;
+                } else if ((v2[i] || 0) < (v1[i] || 0)) {
+                    break;
+                }
+            }
+
+            if (hasUpdate) {
+                setUpdateStatus({ state: "update-available", message: `发现新版本: v${remoteTag}`, remoteVersion: remoteTag, url: data.html_url });
+            } else {
+                setUpdateStatus({ state: "success", message: "当前已是最新版本", remoteVersion: remoteTag });
+            }
+        } catch (e) {
+            setUpdateStatus({ state: "error", message: `检查失败: ${e.message}`, remoteVersion: "" });
+        }
+    };
+
 
     const updateTimeOffset = (value) => {
         const numeric = Number(value);
@@ -1426,7 +1470,7 @@ function App() {
 
                 <div className="mt-auto pt-4 border-t border-gray-800">
                     <div className="text-xs text-gray-500 text-center">
-                        V2.4.0
+                        
                     </div>
                 </div>
             </div>
@@ -2637,7 +2681,7 @@ function App() {
                                 <div className="bg-gray-800 rounded-xl p-8 shadow-lg border border-gray-700 text-center">
                                     <img src={logo} alt="Logo" className="w-20 h-20 rounded-2xl mx-auto mb-6 shadow-lg shadow-blue-500/20" />
                                     <h2 className="text-3xl font-bold mb-2">B站抢票助手</h2>
-                                    <p className="text-gray-400 mb-8">Rust 重构版 V2.4.0</p>
+                                    <p className="text-gray-400 mb-8">Rust 重构版 </p>
 
                                     <div className="text-left bg-gray-900/50 p-6 rounded-xl border border-gray-700 mb-8 space-y-4 text-sm text-gray-300 leading-relaxed">
                                         <p>
@@ -2652,6 +2696,53 @@ function App() {
                                         <p>
                                             若您 fork 或使用本项目，请务必遵守相关法律法规与目标平台规则。
                                         </p>
+                                    </div>
+
+                                    {/* Update Check UI */}
+                                    <div className="mb-8 p-4 bg-gray-900/50 rounded-xl border border-gray-700 w-full max-w-lg mx-auto">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-gray-400 font-bold">当前版本: v{appVersion}</span>
+                                            {updateStatus.state === 'idle' && (
+                                                <button onClick={checkForUpdates} className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 transition-colors">
+                                                    <RefreshCw size={14} /> 检查更新
+                                                </button>
+                                            )}
+                                            {updateStatus.state === 'checking' && (
+                                                <span className="text-gray-500 text-sm flex items-center gap-1">
+                                                    <RefreshCw size={14} className="animate-spin" /> 检查中...
+                                                </span>
+                                            )}
+                                            {updateStatus.state === 'success' && (
+                                                <span className="text-green-400 text-sm flex items-center gap-1">
+                                                    <CheckSquare size={14} /> 最新版本
+                                                </span>
+                                            )}
+                                             {updateStatus.state === 'error' && (
+                                                <span className="text-red-400 text-sm flex items-center gap-1" title={updateStatus.message}>
+                                                    <X size={14} /> 检查失败
+                                                </span>
+                                            )}
+                                        </div>
+                                        
+                                        {updateStatus.state === 'update-available' && (
+                                            <div className="bg-blue-900/30 border border-blue-800 p-3 rounded-lg text-left mt-3 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
+                                                <div>
+                                                    <div className="font-bold text-blue-300 flex items-center gap-2">
+                                                        <Rocket size={16} />
+                                                        新版本可用: v{updateStatus.remoteVersion}
+                                                    </div>
+                                                    <div className="text-xs text-blue-400/70 mt-1">检测到新版本发布，建议立即更新</div>
+                                                </div>
+                                                <a 
+                                                    href={updateStatus.url || "https://github.com/NekoMirra/biliTickerBuy/releases"} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold transition-colors shadow-lg shadow-blue-900/20"
+                                                >
+                                                    去下载
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex justify-center gap-4">
