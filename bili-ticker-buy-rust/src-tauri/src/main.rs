@@ -13,13 +13,17 @@ mod storage;
 use tauri::Manager;
 use buy::TicketInfo;
 use storage::{Account, HistoryItem, ProjectConfig};
-
 use std::fs;
+<<<<<<< HEAD
 use std::path::{Path, PathBuf};
+=======
+>>>>>>> da0fb0a8800e9bc5ab4e3dcd333adcfc64bc5213
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use uuid::Uuid;
+use tauri::AppHandle;
+use tauri::api::path::app_config_dir;
 
 struct AppState {
     tasks: Mutex<HashMap<String, Arc<AtomicBool>>>,
@@ -39,6 +43,7 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
+<<<<<<< HEAD
 fn save_cookies(app_handle: tauri::AppHandle, cookies: String) -> Result<(), String> {
     let dir = get_app_dir(&app_handle);
     storage::save_cookies(&dir, cookies).map_err(|e| e.to_string())
@@ -48,6 +53,37 @@ fn save_cookies(app_handle: tauri::AppHandle, cookies: String) -> Result<(), Str
 fn load_cookies(app_handle: tauri::AppHandle) -> Result<String, String> {
     let dir = get_app_dir(&app_handle);
     storage::load_cookies(&dir).map_err(|e| e.to_string())
+=======
+fn save_cookies(app_handle: AppHandle, cookies: String) -> Result<(), String> {
+    // 1. 获取该应用专用的配置目录路径 (如: ~/Library/Application Support/com.nekomirra.bilitickerbuy)
+    let mut config_path = app_config_dir(&app_handle.config())
+        .ok_or_else(|| "无法获取配置目录".to_string())?;
+
+    // 2. 确保目录存在
+    if !config_path.exists() {
+        fs::create_dir_all(&config_path).map_err(|e| e.to_string())?;
+    }
+
+    // 3. 拼接文件完整路径
+    config_path.push("cookies.json");
+
+    // 4. 写入文件
+    fs::write(config_path, cookies).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn load_cookies(app_handle: AppHandle) -> Result<String, String> {
+    let mut config_path = app_config_dir(&app_handle.config())
+        .ok_or_else(|| "无法获取配置目录".to_string())?;
+    
+    config_path.push("cookies.json");
+
+    if config_path.exists() {
+        fs::read_to_string(config_path).map_err(|e| e.to_string())
+    } else {
+        Ok("".to_string())
+    }
+>>>>>>> da0fb0a8800e9bc5ab4e3dcd333adcfc64bc5213
 }
 
 #[tauri::command]
