@@ -14,12 +14,12 @@ use tauri::Manager;
 use buy::TicketInfo;
 use storage::{Account, HistoryItem, ProjectConfig};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use uuid::Uuid;
-use tauri::AppHandle;
+
 
 struct AppState {
     tasks: Mutex<HashMap<String, Arc<AtomicBool>>>,
