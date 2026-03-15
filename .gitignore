@@ -10,6 +10,10 @@ build
 *.pyc
 *.log
 *.json
+!package.json
+!package-lock.json
+!tauri.conf.json
+!tsconfig.json
 tmp/*
 tmp
 __pycache__/
