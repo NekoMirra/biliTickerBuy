@@ -10,12 +10,12 @@ mod util;
 mod api;
 mod storage;
 
-// use tauri::Manager;
+use tauri::Manager;
 use buy::TicketInfo;
 use storage::{Account, HistoryItem, ProjectConfig};
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,32 +25,39 @@ struct AppState {
     tasks: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
+fn get_app_dir(app_handle: &tauri::AppHandle) -> PathBuf {
+    let path = app_handle.path_resolver().app_config_dir().unwrap_or(PathBuf::from("."));
+    if !path.exists() {
+        let _ = fs::create_dir_all(&path);
+    }
+    path
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 #[tauri::command]
-fn save_cookies(cookies: String) -> Result<(), String> {
-    fs::write("cookies.json", cookies).map_err(|e| e.to_string())
+fn save_cookies(app_handle: tauri::AppHandle, cookies: String) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    storage::save_cookies(&dir, cookies).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn load_cookies() -> Result<String, String> {
-    if Path::new("cookies.json").exists() {
-        fs::read_to_string("cookies.json").map_err(|e| e.to_string())
-    } else {
-        Ok("".to_string())
-    }
+fn load_cookies(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let dir = get_app_dir(&app_handle);
+    storage::load_cookies(&dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_accounts() -> Result<Vec<Account>, String> {
-    storage::get_accounts().map_err(|e| e.to_string())
+fn get_accounts(app_handle: tauri::AppHandle) -> Result<Vec<Account>, String> {
+    let dir = get_app_dir(&app_handle);
+    storage::get_accounts(&dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn add_account(cookies: Vec<String>) -> Result<Account, String> {
+async fn add_account(app_handle: tauri::AppHandle, cookies: Vec<String>) -> Result<Account, String> {
     // Fetch user info to get uid, name, face
     let res = api::fetch_user_info(cookies.clone()).await.map_err(|e| e.to_string())?;
     
@@ -74,55 +81,64 @@ async fn add_account(cookies: Vec<String>) -> Result<Account, String> {
         coins,
     };
 
+    let dir = get_app_dir(&app_handle);
+
     // Load existing accounts
-    let mut accounts = storage::get_accounts().map_err(|e| e.to_string())?;
+    let mut accounts = storage::get_accounts(&dir).map_err(|e| e.to_string())?;
     
     // Remove existing if same uid
     accounts.retain(|a| a.uid != account.uid);
     accounts.push(account.clone());
 
     // Save
-    storage::save_accounts(&accounts).map_err(|e| e.to_string())?;
+    storage::save_accounts(&dir, &accounts).map_err(|e| e.to_string())?;
 
     Ok(account)
 }
 
 #[tauri::command]
-fn remove_account(uid: String) -> Result<(), String> {
-    let mut accounts = storage::get_accounts().map_err(|e| e.to_string())?;
+fn remove_account(app_handle: tauri::AppHandle, uid: String) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    let mut accounts = storage::get_accounts(&dir).map_err(|e| e.to_string())?;
     accounts.retain(|a| a.uid != uid);
-    storage::save_accounts(&accounts).map_err(|e| e.to_string())?;
+    storage::save_accounts(&dir, &accounts).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-fn get_history() -> Result<Vec<HistoryItem>, String> {
-    storage::get_history().map_err(|e| e.to_string())
+fn get_history(app_handle: tauri::AppHandle) -> Result<Vec<HistoryItem>, String> {
+    let dir = get_app_dir(&app_handle);
+    storage::get_history(&dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn add_history(item: HistoryItem) -> Result<(), String> {
-    storage::add_history_item(item).map_err(|e| e.to_string())
+fn add_history(app_handle: tauri::AppHandle, item: HistoryItem) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    storage::add_history_item(&dir, item).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn clear_history() -> Result<(), String> {
-    storage::clear_history().map_err(|e| e.to_string())
+fn clear_history(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    storage::clear_history(&dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_project_history() -> Result<Vec<ProjectConfig>, String> {
-    storage::get_project_history().map_err(|e| e.to_string())
+fn get_project_history(app_handle: tauri::AppHandle) -> Result<Vec<ProjectConfig>, String> {
+    let dir = get_app_dir(&app_handle);
+    storage::get_project_history(&dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn add_project_history(item: ProjectConfig) -> Result<(), String> {
-    storage::add_project_history(item).map_err(|e| e.to_string())
+fn add_project_history(app_handle: tauri::AppHandle, item: ProjectConfig) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    storage::add_project_history(&dir, item).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn remove_project_history(project_id: String, sku_id: String) -> Result<(), String> {
-    storage::remove_project_history_item(project_id, sku_id).map_err(|e| e.to_string())
+fn remove_project_history(app_handle: tauri::AppHandle, project_id: String, sku_id: String) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    storage::remove_project_history_item(&dir, project_id, sku_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -239,9 +255,12 @@ async fn start_buy(
     
     state.tasks.lock().unwrap().insert(task_id.clone(), stop_flag.clone());
 
+    // Resolve app directory for the background task
+    let app_dir = get_app_dir(&window.app_handle());
+
     let task_id_clone = task_id.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = buy::start_buy_task(window, task_id_clone, stop_flag, info, interval, mode, total_attempts, time_start, proxy, time_offset, ntp_server).await {
+        if let Err(e) = buy::start_buy_task(window, task_id_clone, stop_flag, info, interval, mode, total_attempts, time_start, proxy, time_offset, ntp_server, app_dir).await {
             println!("Buy task error: {}", e);
         }
     });
@@ -308,8 +327,9 @@ async fn open_bilibili_home(app: tauri::AppHandle, cookies: Vec<String>) -> Resu
 }
 
 #[tauri::command]
-fn export_cookie(uid: String, path: String) -> Result<(), String> {
-    let accounts = storage::get_accounts().map_err(|e| e.to_string())?;
+fn export_cookie(app_handle: tauri::AppHandle, uid: String, path: String) -> Result<(), String> {
+    let dir = get_app_dir(&app_handle);
+    let accounts = storage::get_accounts(&dir).map_err(|e| e.to_string())?;
     let account = accounts.iter().find(|a| a.uid == uid).ok_or("Account not found")?;
 
     let mut cookie_items = Vec::new();
@@ -341,7 +361,7 @@ fn export_cookie(uid: String, path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn import_cookie(path: String) -> Result<(), String> {
+async fn import_cookie(app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
 
@@ -360,7 +380,7 @@ async fn import_cookie(path: String) -> Result<(), String> {
         return Err("No cookies found in file".to_string());
     }
 
-    add_account(cookies).await.map(|_| ())
+    add_account(app_handle, cookies).await.map(|_| ())
 }
 
 #[tauri::command]

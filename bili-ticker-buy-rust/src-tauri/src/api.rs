@@ -18,7 +18,6 @@ pub async fn fetch_project_info(id: String) -> Result<Value> {
 
     // Check for linked goods (场贩/周边)
     let link_url = format!("https://show.bilibili.com/api/ticket/linkgoods/list?project_id={}&page_type=0", id);
-    // We don't want to fail the whole request if linkgoods fails, so we wrap in a block
     let link_res_result = client.get(&link_url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
         .send()
@@ -35,31 +34,45 @@ pub async fn fetch_project_info(id: String) -> Result<Value> {
                          }
                     }
         
+                    // Parallelize detail fetching
+                    let mut tasks = Vec::new();
+                    
                     for item in list {
                         // Handle id as string or number
                         let link_id_opt = item["id"].as_str().map(|s| s.to_string())
                             .or_else(|| item["id"].as_i64().map(|i| i.to_string()));
 
                         if let Some(link_id) = link_id_opt {
-                             let detail_url = format!("https://show.bilibili.com/api/ticket/linkgoods/detail?link_id={}", link_id);
-                             if let Ok(detail_resp) = client.get(&detail_url)
-                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-                                .send()
-                                .await 
-                             {
-                                if let Ok(detail_res) = detail_resp.json::<Value>().await {
-                                    if let Some(specs) = detail_res["data"]["specs_list"].as_array() {
-                                        if let Some(screen_list) = res["data"]["screen_list"].as_array_mut() {
-                                            for spec in specs {
-                                                let mut spec_obj = spec.clone();
-                                                // Inject project_id and link_id as Python code does
-                                                if let Some(obj) = spec_obj.as_object_mut() {
-                                                    obj.insert("project_id".to_string(), detail_res["data"]["item_id"].clone());
-                                                    obj.insert("link_id".to_string(), serde_json::json!(link_id));
-                                                }
-                                                screen_list.push(spec_obj);
-                                            }
+                             let client_clone = client.clone();
+                             
+                             tasks.push(tokio::spawn(async move {
+                                 let detail_url = format!("https://show.bilibili.com/api/ticket/linkgoods/detail?link_id={}", link_id);
+                                 if let Ok(detail_resp) = client_clone.get(&detail_url)
+                                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+                                    .send()
+                                    .await 
+                                 {
+                                    if let Ok(detail_res) = detail_resp.json::<Value>().await {
+                                        return Some((detail_res, link_id));
+                                    }
+                                 }
+                                 None
+                             }));
+                        }
+                    }
+
+                    // Collect results
+                    for task in tasks {
+                        if let Ok(Some((detail_res, link_id))) = task.await {
+                             if let Some(specs) = detail_res["data"]["specs_list"].as_array() {
+                                if let Some(screen_list) = res["data"]["screen_list"].as_array_mut() {
+                                    for spec in specs {
+                                        let mut spec_obj = spec.clone();
+                                        if let Some(obj) = spec_obj.as_object_mut() {
+                                            obj.insert("project_id".to_string(), detail_res["data"]["item_id"].clone()); // Use actual item_id from detail
+                                            obj.insert("link_id".to_string(), serde_json::json!(link_id));
                                         }
+                                        screen_list.push(spec_obj);
                                     }
                                 }
                              }
@@ -204,13 +217,12 @@ pub fn get_ntp_time(server: &str) -> Result<u64> {
         format!("{}:123", server)
     };
 
-    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| anyhow!("UDP Bind Error: {:?}", e))?;
-    socket.set_read_timeout(Some(Duration::from_secs(2))).map_err(|e| anyhow!("UDP Timeout Error: {:?}", e))?;
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| anyhow::anyhow!("UDP Bind Error: {:?}", e))?;
+    socket.set_read_timeout(Some(Duration::from_secs(2))).map_err(|e| anyhow::anyhow!("UDP Timeout Error: {:?}", e))?;
 
-    let result = sntpc::simple_get_time(&address, &socket).map_err(|e| anyhow!("NTP Error: {:?}", e))?;
+    let result = sntpc::simple_get_time(&address, &socket).map_err(|e| anyhow::anyhow!("NTP Error: {:?}", e))?;
     
-    // sntpc 0.3.5: sec() is a method.
-    // Note: We are ignoring nanoseconds for now as we are unsure of the API method name in 0.3.5.
-    // TODO: Add nanoseconds precision.
-    Ok(result.sec() as u64 * 1000)
+    // Calculate milliseconds: seconds * 1000 + nanoseconds / 1_000_000
+    let millis = (result.seconds as u64 * 1000) + ((result.seconds_fraction as u64 * 1000) >> 32);
+    Ok(millis)
 }

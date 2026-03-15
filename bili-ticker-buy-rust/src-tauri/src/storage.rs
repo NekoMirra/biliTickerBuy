@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -37,9 +37,10 @@ pub struct ProjectConfig {
     pub price: u32,
 }
 
-pub fn get_accounts() -> Result<Vec<Account>> {
-    if Path::new("accounts.json").exists() {
-        let content = fs::read_to_string("accounts.json")?;
+pub fn get_accounts(base_dir: &Path) -> Result<Vec<Account>> {
+    let path = base_dir.join("accounts.json");
+    if path.exists() {
+        let content = fs::read_to_string(path)?;
         let accounts: Vec<Account> = serde_json::from_str(&content).unwrap_or_default();
         Ok(accounts)
     } else {
@@ -47,15 +48,17 @@ pub fn get_accounts() -> Result<Vec<Account>> {
     }
 }
 
-pub fn save_accounts(accounts: &Vec<Account>) -> Result<()> {
+pub fn save_accounts(base_dir: &Path, accounts: &Vec<Account>) -> Result<()> {
+    let path = base_dir.join("accounts.json");
     let json = serde_json::to_string_pretty(accounts)?;
-    fs::write("accounts.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
 
-pub fn get_history() -> Result<Vec<HistoryItem>> {
-    if Path::new("history.json").exists() {
-        let content = fs::read_to_string("history.json")?;
+pub fn get_history(base_dir: &Path) -> Result<Vec<HistoryItem>> {
+    let path = base_dir.join("history.json");
+    if path.exists() {
+        let content = fs::read_to_string(path)?;
         let history: Vec<HistoryItem> = serde_json::from_str(&content).unwrap_or_default();
         Ok(history)
     } else {
@@ -63,22 +66,25 @@ pub fn get_history() -> Result<Vec<HistoryItem>> {
     }
 }
 
-pub fn add_history_item(item: HistoryItem) -> Result<()> {
-    let mut history = get_history()?;
+pub fn add_history_item(base_dir: &Path, item: HistoryItem) -> Result<()> {
+    let mut history = get_history(base_dir)?;
     history.insert(0, item);
+    let path = base_dir.join("history.json");
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write("history.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
 
-pub fn clear_history() -> Result<()> {
-    fs::write("history.json", "[]")?;
+pub fn clear_history(base_dir: &Path) -> Result<()> {
+    let path = base_dir.join("history.json");
+    fs::write(path, "[]")?;
     Ok(())
 }
 
-pub fn get_project_history() -> Result<Vec<ProjectConfig>> {
-    if Path::new("project_history.json").exists() {
-        let content = fs::read_to_string("project_history.json")?;
+pub fn get_project_history(base_dir: &Path) -> Result<Vec<ProjectConfig>> {
+    let path = base_dir.join("project_history.json");
+    if path.exists() {
+        let content = fs::read_to_string(path)?;
         let history: Vec<ProjectConfig> = serde_json::from_str(&content).unwrap_or_default();
         Ok(history)
     } else {
@@ -86,46 +92,52 @@ pub fn get_project_history() -> Result<Vec<ProjectConfig>> {
     }
 }
 
-pub fn add_project_history(item: ProjectConfig) -> Result<()> {
-    let mut history = get_project_history()?;
+pub fn add_project_history(base_dir: &Path, item: ProjectConfig) -> Result<()> {
+    let mut history = get_project_history(base_dir)?;
     
+    // ... logic remains same ...
     if item.sku_id.is_empty() {
-        // Adding a generic project (viewed but not configured)
-        // Remove any existing generic entry for THIS project
         history.retain(|p| !(p.project_id == item.project_id && p.sku_id.is_empty()));
-        
-        // Check if there are any specific entries for this project
         let has_specific = history.iter().any(|p| p.project_id == item.project_id && !p.sku_id.is_empty());
-        
-        // If no specific entries, insert this generic one at the top
         if !has_specific {
             history.insert(0, item);
         }
     } else {
-        // Adding a specific configuration
-        // Remove exactly this config if it exists
         history.retain(|p| p.sku_id != item.sku_id);
-        
-        // Remove any generic entry for this project (since we now have a specific one)
         history.retain(|p| !(p.project_id == item.project_id && p.sku_id.is_empty()));
-        
         history.insert(0, item);
     }
 
-    // Limit history size
     if history.len() > 100 {
         history.truncate(100);
     }
 
+    let path = base_dir.join("project_history.json");
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write("project_history.json", json)?;
+    fs::write(path, json)?;
     Ok(())
 }
 
-pub fn remove_project_history_item(project_id: String, sku_id: String) -> Result<()> {
-    let mut history = get_project_history()?;
+pub fn remove_project_history_item(base_dir: &Path, project_id: String, sku_id: String) -> Result<()> {
+    let mut history = get_project_history(base_dir)?;
     history.retain(|p| !(p.project_id == project_id && p.sku_id == sku_id));
+    let path = base_dir.join("project_history.json");
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write("project_history.json", json)?;
+    fs::write(path, json)?;
     Ok(())
+}
+
+pub fn save_cookies(base_dir: &Path, cookies: String) -> Result<()> {
+    let path = base_dir.join("cookies.json");
+    fs::write(path, cookies)?;
+    Ok(())
+}
+
+pub fn load_cookies(base_dir: &Path) -> Result<String> {
+    let path = base_dir.join("cookies.json");
+    if path.exists() {
+        Ok(fs::read_to_string(path)?)
+    } else {
+        Ok("".to_string())
+    }
 }

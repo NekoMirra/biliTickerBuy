@@ -1,7 +1,7 @@
 use tauri::Window;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use reqwest::{Client, Url};
 use reqwest::cookie::Jar;
 use std::time::{Duration, Instant};
@@ -68,7 +68,8 @@ pub async fn start_buy_task(
     time_start: Option<String>,
     proxy: Option<String>,
     time_offset: Option<f64>,
-    ntp_server: Option<String>
+    ntp_server: Option<String>,
+    base_dir: std::path::PathBuf
 ) -> Result<()> {
     emit_log(&window, &task_id, "Starting buy task...");
     
@@ -86,35 +87,22 @@ pub async fn start_buy_task(
         };
 
         if let Some(target) = target_time {
-            let mut current_offset = time_offset.unwrap_or(0.0) as i64;
-            // Correct logic: target_local = target_server - offset
-            // If offset > 0 (server > local), we need to start earlier (local time is smaller)
-            let mut target_with_offset = target - chrono::Duration::milliseconds(current_offset);
-            
-            emit_log(&window, &task_id, &format!("Waiting until: {} (Offset: {}ms)", target_with_offset.format("%Y-%m-%d %H:%M:%S%.3f"), current_offset));
+            let initial_offset = time_offset.unwrap_or(0.0) as i64;
+            let current_offset = Arc::new(AtomicI64::new(initial_offset));
+            let offset_clone = current_offset.clone();
+            let stop_flag_clone = stop_flag.clone();
+            let ntp_server_clone = ntp_server.clone();
+            let task_id_clone = task_id.clone();
+            let window_clone = window.clone(); // Tauri windows are cheap to clone (handle)
 
-            let mut last_sync_time = Instant::now();
-            let sync_interval = Duration::from_secs(10); // Sync every 10 seconds
-
-            loop {
-                if stop_flag.load(Ordering::Relaxed) {
-                    emit_log(&window, &task_id, "Task stopped by user while waiting.");
-                    return Ok(());
-                }
-
-                let now = Local::now();
-                let diff = target_with_offset - now;
-                let remaining_ms = diff.num_milliseconds();
-                
-                if remaining_ms <= 0 {
-                    break;
-                }
-
-                // Auto-sync logic: if remaining > 2s and last sync > 10s ago
-                if remaining_ms > 2000 && last_sync_time.elapsed() > sync_interval {
-                    emit_log(&window, &task_id, "Auto-syncing time offset...");
-                    let url = ntp_server.clone().unwrap_or_else(|| "https://api.bilibili.com/x/report/click/now".to_string());
+            // Spawn background sync task
+            tokio::spawn(async move {
+                let sync_interval = Duration::from_secs(10);
+                loop {
+                    if stop_flag_clone.load(Ordering::Relaxed) { break; }
+                    sleep(sync_interval).await;
                     
+                    let url = ntp_server_clone.clone().unwrap_or_else(|| "https://api.bilibili.com/x/report/click/now".to_string());
                     let sync_result = if url.starts_with("http") {
                         api::get_server_time(Some(url.clone())).await
                     } else {
@@ -125,22 +113,45 @@ pub async fn start_buy_task(
                         Ok(server_time) => {
                             let local_time = api::get_local_time();
                             let new_offset = server_time - local_time;
-                            current_offset = new_offset;
-                            // Update target with new offset
-                            target_with_offset = target - chrono::Duration::milliseconds(current_offset);
-                            emit_log(&window, &task_id, &format!("Synced offset: {}ms. New target: {}", current_offset, target_with_offset.format("%H:%M:%S%.3f")));
+                            offset_clone.store(new_offset, Ordering::Relaxed);
+                            // Log occasionally or just debug? Keeping it quiet to avoid log spam, or use debug!
                         },
                         Err(e) => {
-                            emit_log(&window, &task_id, &format!("Auto-sync failed: {}", e));
+                             emit_log(&window_clone, &task_id_clone, &format!("Background sync failed: {}", e));
                         }
                     }
-                    last_sync_time = Instant::now();
+                }
+            });
+            
+            emit_log(&window, &task_id, &format!("Waiting until: {} (Initial Offset: {}ms)", target.format("%Y-%m-%d %H:%M:%S%.3f"), initial_offset));
+
+            loop {
+                if stop_flag.load(Ordering::Relaxed) {
+                    emit_log(&window, &task_id, "Task stopped by user while waiting.");
+                    return Ok(());
                 }
 
-                if diff.num_seconds() > 5 {
+                let now = Local::now();
+                let offset_val = current_offset.load(Ordering::Relaxed);
+                let target_with_offset = target - chrono::Duration::milliseconds(offset_val);
+                
+                let diff = target_with_offset - now;
+                let remaining_ms = diff.num_milliseconds();
+                
+                if remaining_ms <= 0 {
+                    break;
+                }
+
+                // Adaptive sleep strategy for high precision
+                if remaining_ms > 5000 {
                     sleep(Duration::from_secs(1)).await;
-                } else {
+                } else if remaining_ms > 1000 {
                     sleep(Duration::from_millis(100)).await;
+                } else if remaining_ms > 50 {
+                    sleep(Duration::from_millis(10)).await;
+                } else {
+                    // Spin wait for the last 50ms for maximum precision
+                    std::hint::spin_loop();
                 }
             }
             emit_log(&window, &task_id, "Time reached! Starting execution...");
@@ -274,8 +285,11 @@ pub async fn start_buy_task(
         emit_log(&window, &task_id, &format!("Contact Info - Name: {:?}, Tel: {:?}", create_payload.get("contact_name"), create_payload.get("contact_tel")));
 
         let mut success = false;
+        
+        // Use user-provided total_attempts, default to 60 if 0 passed accidentally
+        let max_attempts = if total_attempts > 0 { total_attempts } else { 60 };
 
-        for attempt in 1..=60 {
+        for attempt in 1..=max_attempts {
             if !is_running { break; }
             if stop_flag.load(Ordering::Relaxed) {
                 emit_log(&window, &task_id, "Task stopped by user.");
@@ -346,7 +360,7 @@ pub async fn start_buy_task(
                                      time: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                                      pay_url: pay_url_str,
                                  };
-                                 let _ = storage::add_history_item(history_item);
+                                 let _ = storage::add_history_item(&base_dir, history_item);
                              } else {
                                  emit_log(&window, &task_id, &format!("Failed to extract Order ID from: {:?}", r_json));
                              }
@@ -375,7 +389,7 @@ pub async fn start_buy_task(
                     }
                 },
                 Err(e) => {
-                    emit_log(&window, &task_id, &format!("[Attempt {}/60] Request error: {}", attempt, e));
+                    emit_log(&window, &task_id, &format!("[Attempt {}/{}] Request error: {}", attempt, max_attempts, e));
                 }
             }
 
