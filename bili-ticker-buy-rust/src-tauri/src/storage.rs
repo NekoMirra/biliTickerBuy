@@ -3,6 +3,18 @@ use std::fs;
 use std::path::Path;
 use anyhow::{Result, Context};
 
+/// Atomically write content to a file by writing to a temp file first, then renaming.
+/// This prevents data corruption if the app crashes mid-write.
+fn atomic_write(path: &Path, content: &str) -> Result<()> {
+    let parent = path.parent().unwrap_or(Path::new("."));
+    let temp_path = parent.join(format!("{}.tmp", path.file_name().unwrap_or_default().to_string_lossy()));
+    fs::write(&temp_path, content)
+        .with_context(|| format!("Failed to write temp file: {:?}", temp_path))?;
+    fs::rename(&temp_path, path)
+        .with_context(|| format!("Failed to rename temp file to: {:?}", path))?;
+    Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Account {
     pub uid: String,
@@ -52,9 +64,7 @@ pub fn get_accounts(base_dir: &Path) -> Result<Vec<Account>> {
 pub fn save_accounts(base_dir: &Path, accounts: &Vec<Account>) -> Result<()> {
     let path = base_dir.join("accounts.json");
     let json = serde_json::to_string_pretty(accounts)?;
-    fs::write(&path, json)
-        .with_context(|| format!("Failed to save accounts file: {:?}", path))?;
-    Ok(())
+    atomic_write(&path, &json)
 }
 
 pub fn get_history(base_dir: &Path) -> Result<Vec<HistoryItem>> {
@@ -74,16 +84,12 @@ pub fn add_history_item(base_dir: &Path, item: HistoryItem) -> Result<()> {
     history.insert(0, item);
     let path = base_dir.join("history.json");
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write(&path, json)
-        .with_context(|| format!("Failed to save history file: {:?}", path))?;
-    Ok(())
+    atomic_write(&path, &json)
 }
 
 pub fn clear_history(base_dir: &Path) -> Result<()> {
     let path = base_dir.join("history.json");
-    fs::write(&path, "[]")
-        .with_context(|| format!("Failed to clear history file: {:?}", path))?;
-    Ok(())
+    atomic_write(&path, "[]")
 }
 
 pub fn get_project_history(base_dir: &Path) -> Result<Vec<ProjectConfig>> {
@@ -125,9 +131,7 @@ pub fn add_project_history(base_dir: &Path, item: ProjectConfig) -> Result<()> {
 
     let path = base_dir.join("project_history.json");
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write(&path, json)
-        .with_context(|| format!("Failed to save project history file: {:?}", path))?;
-    Ok(())
+    atomic_write(&path, &json)
 }
 
 pub fn remove_project_history_item(base_dir: &Path, project_id: String, sku_id: String) -> Result<()> {
@@ -135,16 +139,12 @@ pub fn remove_project_history_item(base_dir: &Path, project_id: String, sku_id: 
     history.retain(|p| !(p.project_id == project_id && p.sku_id == sku_id));
     let path = base_dir.join("project_history.json");
     let json = serde_json::to_string_pretty(&history)?;
-    fs::write(&path, json)
-        .with_context(|| format!("Failed to save project history file: {:?}", path))?;
-    Ok(())
+    atomic_write(&path, &json)
 }
 
 pub fn save_cookies(base_dir: &Path, cookies: String) -> Result<()> {
     let path = base_dir.join("cookies.json");
-    fs::write(&path, cookies)
-        .with_context(|| format!("Failed to save cookies file: {:?}", path))?;
-    Ok(())
+    atomic_write(&path, &cookies)
 }
 
 pub fn load_cookies(base_dir: &Path) -> Result<String> {

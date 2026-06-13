@@ -62,7 +62,7 @@ impl CTokenGenerator {
         self.screen_avail_width = rng.gen_range(1..100);
 
         if is_create_v2 {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
             self.time_difference = (now + self.time_offset - self.ticket_collection_t as i64) as u32;
             self.timer = (self.time_difference as u64 + self.stay_time) as u32;
             self.page_unload = 25;

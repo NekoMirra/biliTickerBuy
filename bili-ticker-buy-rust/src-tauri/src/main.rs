@@ -147,18 +147,13 @@ async fn get_user_info(cookies: Vec<String>) -> Result<serde_json::Value, String
 }
 
 #[tauri::command]
-fn get_login_qrcode() -> Result<(String, String), String> {
-    auth::generate_qrcode().map_err(|e| e.to_string())
+async fn get_login_qrcode() -> Result<(String, String), String> {
+    auth::generate_qrcode().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn poll_login_status(qrcode_key: String) -> Result<String, String> {
-    let key = qrcode_key.clone();
-    let res = tauri::async_runtime::spawn_blocking(move || {
-        auth::poll_login(&key)
-    }).await.map_err(|e| e.to_string())?;
-    
-    res.map_err(|e| e.to_string())
+    auth::poll_login(&qrcode_key).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -179,11 +174,15 @@ async fn fetch_address_list(cookies: Vec<String>) -> Result<serde_json::Value, S
 #[tauri::command]
 async fn sync_time(server_url: Option<String>) -> Result<serde_json::Value, String> {
     let url = server_url.unwrap_or_else(|| "https://api.bilibili.com/x/report/click/now".to_string());
-    
+
     let server_time = if url.starts_with("http") {
         api::get_server_time(Some(url)).await.map_err(|e| e.to_string())?
     } else {
-        api::get_ntp_time(&url).map_err(|e| e.to_string())? as i64
+        // Wrap blocking NTP call in spawn_blocking to avoid blocking the async runtime
+        let ntp_url = url.clone();
+        tokio::task::spawn_blocking(move || {
+            api::get_ntp_time(&ntp_url).map(|t| t as i64)
+        }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?
     };
 
     let local_time = api::get_local_time();
@@ -259,10 +258,13 @@ async fn start_buy(
     let app_dir = get_app_dir(&window.app_handle());
 
     let task_id_clone = task_id.clone();
+    let tasks_clone = state.tasks.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = buy::start_buy_task(window, task_id_clone, stop_flag, info, interval, mode, total_attempts, time_start, proxy, time_offset, ntp_server, app_dir).await {
+        if let Err(e) = buy::start_buy_task(window, task_id_clone.clone(), stop_flag, info, interval, mode, total_attempts, time_start, proxy, time_offset, ntp_server, app_dir).await {
             println!("Buy task error: {}", e);
         }
+        // Clean up the task from AppState to prevent memory leak
+        tasks_clone.lock().unwrap().remove(&task_id_clone);
     });
     
     Ok(task_id)

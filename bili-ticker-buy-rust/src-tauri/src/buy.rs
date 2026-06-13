@@ -14,6 +14,28 @@ use log::info;
 use serde_json::json;
 use chrono::Local;
 
+/// Error code dictionary from the original Python project
+/// Maps error codes to human-readable messages
+fn get_error_message(errno: i64) -> &'static str {
+    match errno {
+        0 => "成功",
+        3 => "抢票CD中",
+        100001 => "无票",
+        100003 => "验证码过期",
+        100009 => "库存不足,暂无余票",
+        100016 => "项目不可售",
+        100017 => "票种不可售",
+        100034 => "票价错误",
+        100039 => "活动收摊啦,下次要快点哦",
+        100041 => "对未发售的票进行抢票",
+        100048 => "已经下单，有尚未完成订单",
+        100051 => "订单准备过期，重新验证",
+        900001 => "当前拥挤，请稍后再试",
+        900002 => "当前拥挤，请稍后再试",
+        _ => "未知错误码",
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TicketInfo {
     pub project_id: String,
@@ -103,10 +125,15 @@ pub async fn start_buy_task(
                     sleep(sync_interval).await;
                     
                     let url = ntp_server_clone.clone().unwrap_or_else(|| "https://api.bilibili.com/x/report/click/now".to_string());
+                    let ntp_url = url.clone();
                     let sync_result = if url.starts_with("http") {
                         api::get_server_time(Some(url.clone())).await
                     } else {
-                        api::get_ntp_time(&url).map(|t| t as i64)
+                        // Wrap blocking NTP call in spawn_blocking to avoid blocking the async runtime
+                        let ntp_url_owned = ntp_url.clone();
+                        tokio::task::spawn_blocking(move || {
+                            api::get_ntp_time(&ntp_url_owned).map(|t| t as i64)
+                        }).await.unwrap_or_else(|e| Err(anyhow::anyhow!("Task join error: {}", e)))
                     };
 
                     match sync_result {
@@ -150,8 +177,9 @@ pub async fn start_buy_task(
                 } else if remaining_ms > 50 {
                     sleep(Duration::from_millis(10)).await;
                 } else {
-                    // Spin wait for the last 50ms for maximum precision
-                    std::hint::spin_loop();
+                    // Use tokio::time::sleep for the last 50ms — avoids CPU burn
+                    // while still yielding to the async runtime for precise timing
+                    sleep(Duration::from_millis(1)).await;
                 }
             }
             emit_log(&window, &task_id, "Time reached! Starting execution...");
@@ -317,7 +345,7 @@ pub async fn start_buy_task(
                     let r_json: serde_json::Value = r.json().await.unwrap_or(json!({}));
                     let errno = r_json["errno"].as_i64().or(r_json["code"].as_i64()).unwrap_or(-1);
                     
-                    emit_log(&window, &task_id, &format!("[Attempt {}/60] Code: {} | Msg: {}", attempt, errno, r_json["msg"]));
+                    emit_log(&window, &task_id, &format!("[Attempt {}/{}] Code: {} ({}) | Msg: {}", attempt, max_attempts, errno, get_error_message(errno), r_json["msg"]));
 
                     if errno == 0 || errno == 100048 || errno == 100079 {
                         emit_log(&window, &task_id, "Order created successfully!");
@@ -342,10 +370,12 @@ pub async fn start_buy_task(
                                      if let Ok(pay_json) = pay_res.json::<serde_json::Value>().await {
                                          if let Some(code_url) = pay_json["data"]["code_url"].as_str() {
                                              pay_url_str = code_url.to_string();
-                                             let _ = window.emit("payment_qrcode", PaymentPayload {
+                                             if let Err(e) = window.emit("payment_qrcode", PaymentPayload {
                                                  task_id: task_id.clone(),
                                                  url: code_url.to_string()
-                                             });
+                                             }) {
+                                                 emit_log(&window, &task_id, &format!("Warning: Failed to emit payment event: {}", e));
+                                             }
                                          } else {
                                              emit_log(&window, &task_id, &format!("Failed to get payment URL: {:?}", pay_json));
                                          }
@@ -360,17 +390,21 @@ pub async fn start_buy_task(
                                      time: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                                      pay_url: pay_url_str,
                                  };
-                                 let _ = storage::add_history_item(&base_dir, history_item);
+                                 if let Err(e) = storage::add_history_item(&base_dir, history_item) {
+                                     emit_log(&window, &task_id, &format!("Warning: Failed to save history: {}", e));
+                                 }
                              } else {
                                  emit_log(&window, &task_id, &format!("Failed to extract Order ID from: {:?}", r_json));
                              }
                         }
                         
-                        let _ = window.emit("task_result", TaskResultPayload {
+                        if let Err(e) = window.emit("task_result", TaskResultPayload {
                             task_id: task_id.clone(),
                             success: true,
                             message: format!("抢票成功！订单号: {}", r_json["data"]["orderId"])
-                        });
+                        }) {
+                            emit_log(&window, &task_id, &format!("Warning: Failed to emit task result: {}", e));
+                        }
                         break;
                     }
 
@@ -393,16 +427,17 @@ pub async fn start_buy_task(
                 }
             }
 
-            // Precise sleep
+            // Precise sleep — use tokio::sleep to avoid CPU burn
             let elapsed = start.elapsed();
             let interval_duration = Duration::from_millis(interval);
             if elapsed < interval_duration {
                 let remaining = interval_duration - elapsed;
-                if remaining.as_secs_f64() > 0.02 {
+                if remaining.as_millis() > 20 {
                     sleep(remaining - Duration::from_millis(10)).await;
                 }
+                // Yield with a small sleep rather than spinning
                 while start.elapsed() < interval_duration {
-                    std::hint::spin_loop();
+                    sleep(Duration::from_millis(1)).await;
                 }
             }
         }
@@ -416,11 +451,13 @@ pub async fn start_buy_task(
                 if left_time <= 0 {
                     is_running = false;
                     emit_log(&window, &task_id, "Total attempts reached. Stopping.");
-                    let _ = window.emit("task_result", TaskResultPayload {
+                    if let Err(e) = window.emit("task_result", TaskResultPayload {
                         task_id: task_id.clone(),
                         success: false,
                         message: "达到最大尝试次数，任务停止".to_string()
-                    });
+                    }) {
+                        emit_log(&window, &task_id, &format!("Warning: Failed to emit task result: {}", e));
+                    }
                 }
             }
         }

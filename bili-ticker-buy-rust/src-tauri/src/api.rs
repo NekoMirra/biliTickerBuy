@@ -206,7 +206,7 @@ pub async fn get_server_time(url_opt: Option<String>) -> Result<i64> {
 pub fn get_local_time() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_millis() as i64
 }
 
