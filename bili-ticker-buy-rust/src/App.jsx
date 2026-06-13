@@ -277,15 +277,16 @@ function App() {
 
         const unlistenLog = listen("log", (event) => {
             const { task_id, message } = event.payload;
+            const timestamp = new Date().toLocaleTimeString();
             if (task_id) {
                 setTasks(prev => prev.map(t => {
                     if (t.id === task_id) {
-                        return { ...t, logs: [...t.logs, message], lastLog: message };
+                        return { ...t, logs: [...t.logs, { time: timestamp, message }], lastLog: message };
                     }
                     return t;
                 }));
             } else {
-                setLogs((prev) => [...prev, message]);
+                setLogs((prev) => [...prev, { time: timestamp, message }]);
             }
         });
 
@@ -1629,15 +1630,15 @@ function App() {
                                                 ↓ 回到底部
                                             </button>
                                         )}
-                                        <button onClick={() => setLogs([])} className="text-gray-600 hover:text-gray-400">清空</button>
+                                        <button onClick={() => { if (window.confirm("确定清空所有日志？")) setLogs([]); }} className="text-gray-600 hover:text-gray-400">清空</button>
                                     </div>
                                 </div>
                                 <div ref={logContainerRef} onScroll={handleLogScroll} className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
                                     {logs.length === 0 && <div className="text-gray-700 italic text-center mt-10">暂无日志...</div>}
                                     {logs.map((log, i) => (
                                         <div key={i} className="text-green-400 break-all">
-                                            <span className="text-gray-600 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                                            {log}
+                                            <span className="text-gray-600 mr-2">[{log.time}]</span>
+                                            {log.message}
                                         </div>
                                     ))}
                                     <div ref={logsEndRef} />
@@ -1795,8 +1796,8 @@ function App() {
                                         <div className={`bg-black font-mono text-xs overflow-y-auto custom-scrollbar ${viewMode === "grid" ? "flex-1 p-2" : "rounded-lg p-3 h-32 bg-black/50"}`}>
                                             {(viewMode === "grid" ? task.logs : task.logs.slice(-10)).map((log, i) => (
                                                 <div key={i} className="text-gray-300 break-all border-b border-gray-800/50 last:border-0 py-0.5">
-                                                    <span className="text-gray-600 mr-1">[{new Date().toLocaleTimeString()}]</span>
-                                                    {log}
+                                                    <span className="text-gray-600 mr-1">[{log.time}]</span>
+                                                    {log.message}
                                                 </div>
                                             ))}
                                             {task.logs.length === 0 && <div className="text-gray-600 italic text-center mt-4">等待日志...</div>}
