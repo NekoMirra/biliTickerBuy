@@ -161,6 +161,10 @@ function App() {
     const fileInputRef = useRef(null);
     const cookieFileInputRef = useRef(null);
 
+    // Smart auto-scroll state
+    const [isAutoScroll, setIsAutoScroll] = useState(true);
+    const logContainerRef = useRef(null);
+
     // Update Check State
     const [appVersion, setAppVersion] = useState("");
     const [updateStatus, setUpdateStatus] = useState({ state: "idle", message: "", remoteVersion: "" }); 
@@ -475,9 +479,18 @@ function App() {
         }
     }
 
+    // 检测用户是否滚动到底部附近
+    const handleLogScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
+        setIsAutoScroll(isNearBottom);
+    };
+
     useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [logs]);
+        if (isAutoScroll) {
+            logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [logs, isAutoScroll]);
 
     async function startAddAccount() {
         setShowLoginModal(true);
@@ -1610,9 +1623,16 @@ function App() {
                                         <Terminal size={14} />
                                         系统日志
                                     </span>
-                                    <button onClick={() => setLogs([])} className="text-gray-600 hover:text-gray-400">清空</button>
+                                    <div className="flex items-center gap-2">
+                                        {!isAutoScroll && logs.length > 0 && (
+                                            <button onClick={() => { setIsAutoScroll(true); logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); }} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                                ↓ 回到底部
+                                            </button>
+                                        )}
+                                        <button onClick={() => setLogs([])} className="text-gray-600 hover:text-gray-400">清空</button>
+                                    </div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
+                                <div ref={logContainerRef} onScroll={handleLogScroll} className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
                                     {logs.length === 0 && <div className="text-gray-700 italic text-center mt-10">暂无日志...</div>}
                                     {logs.map((log, i) => (
                                         <div key={i} className="text-green-400 break-all">
@@ -1780,9 +1800,9 @@ function App() {
                                                 </div>
                                             ))}
                                             {task.logs.length === 0 && <div className="text-gray-600 italic text-center mt-4">等待日志...</div>}
-                                            {/* Auto scroll anchor */}
+                                            {/* Auto scroll anchor - only when auto-scroll enabled */}
                                             <div ref={(el) => {
-                                                if (el && viewMode === "grid") {
+                                                if (el && viewMode === "grid" && isAutoScroll) {
                                                     el.scrollIntoView({ behavior: "smooth" });
                                                 }
                                             }} />
